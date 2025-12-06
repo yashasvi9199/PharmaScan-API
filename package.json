@@ -12,8 +12,6 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@vendia/serverless-express": "^4.12.6",
-    "@vercel/node": "^5.5.15",
     "express": "^5.2.1"
   },
   "devDependencies": {

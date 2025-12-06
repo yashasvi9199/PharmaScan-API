@@ -1,16 +1,7 @@
-import express from "express";
-import type {Request, Response} from "express";
-import scanRouter from "./routes/scan.js"
+import app from "./app";
 
-const app = express();
-app.use(express.json());
+const PORT = process.env.PORT || 3000;
 
-// Temp root for vercel
-app.get("/", (_req: Request, res: Response) => {
-    res.json( {status: "PharmaScan API running"} ); 
+app.listen(PORT, () => {
+  console.log("Server started on port", PORT);
 });
-
-// feature router
-app.use("/api/scan", scanRouter); 
-
-export default app;
