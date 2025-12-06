@@ -1,10 +1,9 @@
-// src/lib/ocr/ocrAdapter.ts
 import Tesseract from "tesseract.js";
 
 export interface OCRAdapterResult {
   text: string;
   confidence?: number;
-  raw?: Record<string, unknown>;
+  raw?: unknown;
 }
 
 export async function runOCR(buffer: Buffer): Promise<OCRAdapterResult> {
@@ -12,7 +11,8 @@ export async function runOCR(buffer: Buffer): Promise<OCRAdapterResult> {
 
   return {
     text: data.text ?? "",
-    confidence: data.confidence,
-    raw: data,
+    confidence: // prefer numeric confidence if available, otherwise undefined
+      typeof (data as any).confidence === "number" ? (data as any).confidence : undefined,
+    raw: data as unknown,
   };
 }
