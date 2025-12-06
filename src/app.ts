@@ -1,11 +1,13 @@
 import express from "express";
+import routes from "./routes/index";
 
 const app = express();
-app.use(express.json());
 
-// simple test route
-app.get("/", (_req, res) => {
-  res.send("Backend OK");
-});
+// Basic middlewares
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Mount feature routes under /api
+app.use("/api", routes);
 
 export default app;
