@@ -1,9 +1,9 @@
 import { Router } from "express";
 import { handleScan } from "../controllers/scan.controller";
+import { singleFileUpload } from "../middlewares/upload";
 
 const router = Router();
 
-// POST /api/scan
-router.post("/", handleScan);
+router.post("/", singleFileUpload, handleScan);
 
 export default router;

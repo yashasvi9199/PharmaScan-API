@@ -1,26 +1,29 @@
-// Repository stub for OCR/scan persistence.
-// Later this will store scan records in a database.
+import fs from "fs";
+import path from "path";
+import type { ScanResult } from "../types/scan.types";
 
-export interface StoredScanRecord {
-  id: string;
-  extractedText: string;
-  confidence?: number;
-  raw?: Record<string, unknown>;
-  createdAt: string;
+const DB_PATH = path.join(process.cwd(), "scan-db.json");
+
+function readDB(): ScanResult[] {
+  try {
+    const raw = fs.readFileSync(DB_PATH, "utf-8");
+    return JSON.parse(raw) as ScanResult[];
+  } catch {
+    return [];
+  }
 }
 
-/**
- * Store a scan result (stub).
- * Later: insert into Postgres or any DB layer.
- */
-export async function saveScan(record: StoredScanRecord): Promise<void> {
-  // Stub: no-op
-  return;
+function writeDB(data: ScanResult[]): void {
+  fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
 }
 
-/**
- * Fetch a scan record by ID (stub).
- */
-export async function getScanById(id: string): Promise<StoredScanRecord | null> {
-  return null; // Not implemented
+export async function saveScan(record: ScanResult): Promise<void> {
+  const db = readDB();
+  db.push(record);
+  writeDB(db);
+}
+
+export async function getScanById(id: string): Promise<ScanResult | null> {
+  const db = readDB();
+  return db.find((r) => r.id === id) ?? null;
 }

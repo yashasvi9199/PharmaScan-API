@@ -1,24 +1,18 @@
-export interface ScanServiceResult {
-  id: string;
-  extractedText: string;
-  confidence?: number;
-  raw?: Record<string, unknown>;
-  createdAt?: string;
-}
+import { runOCR } from "../lib/ocr/ocrAdapter";
+import { saveScan } from "../repositories/ocr.repo";
+import type { ScanResult } from "../types/scan.types";
 
-/**
- * Process an uploaded image buffer.
- * This stub only returns a placeholder result so the pipeline stays stable.
- */
-export async function processScan(
-  fileBuffer: Buffer,
-  filename: string
-): Promise<ScanServiceResult> {
-  return {
-    id: `stub-${Date.now()}`,
-    extractedText: "",
-    confidence: undefined,
-    raw: { note: "stub service - OCR not implemented" },
+export async function processScan(fileBuffer: Buffer, filename: string): Promise<ScanResult> {
+  const ocr = await runOCR(fileBuffer);
+
+  const result: ScanResult = {
+    id: `scan-${Date.now()}`,
+    extractedText: ocr.text ?? "",
+    confidence: ocr.confidence,
+    raw: { ocr },
     createdAt: new Date().toISOString(),
   };
+
+  await saveScan(result);
+  return result;
 }

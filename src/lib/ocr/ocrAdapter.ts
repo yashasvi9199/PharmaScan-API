@@ -1,17 +1,18 @@
+// src/lib/ocr/ocrAdapter.ts
+import Tesseract from "tesseract.js";
+
 export interface OCRAdapterResult {
   text: string;
   confidence?: number;
   raw?: Record<string, unknown>;
 }
 
-/**
- * Accepts an image buffer and returns stub OCR output.
- * Replace this when real OCR integration is implemented.
- */
 export async function runOCR(buffer: Buffer): Promise<OCRAdapterResult> {
+  const { data } = await Tesseract.recognize(buffer, "eng");
+
   return {
-    text: "",
-    confidence: undefined,
-    raw: { note: "stub ocr adapter - not implemented" },
+    text: data.text ?? "",
+    confidence: data.confidence,
+    raw: data,
   };
 }
