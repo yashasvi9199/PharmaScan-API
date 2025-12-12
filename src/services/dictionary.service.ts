@@ -11,6 +11,41 @@ const DICTIONARY_URL = "https://yashasvi9199.github.io/PharmaScan-Dictionary/dic
 let dictionaryCache: DictionaryItem[] | null = null;
 let fuse: Fuse<DictionaryItem> | null = null;
 
+// Common words found on medicine packaging that should NOT match drugs
+const STOPWORDS = new Set([
+  // General label text
+  "tablet", "tablets", "capsule", "capsules", "syrup", "injection", "cream", "gel",
+  "ointment", "drops", "solution", "suspension", "powder", "patch", "spray",
+  // Dosage & usage
+  "dosage", "dose", "daily", "twice", "thrice", "times", "before", "after", "meals",
+  "morning", "evening", "night", "hours", "days", "weeks", "months", "oral", "topical",
+  // Warnings & instructions
+  "warning", "warnings", "caution", "keep", "away", "children", "store", "cool",
+  "place", "protect", "light", "moisture", "shake", "well", "before", "use",
+  "consult", "doctor", "physician", "pharmacist", "pregnant", "nursing", "allergic",
+  "side", "effects", "discontinue", "occurs", "seek", "medical", "advice", "immediately",
+  // Manufacturing
+  "manufactured", "marketed", "distributed", "india", "limited", "pvt", "ltd",
+  "batch", "mfg", "exp", "date", "price", "mrp", "inclusive", "taxes", "pack",
+  // Common non-drug words
+  "each", "film", "coated", "contains", "active", "inactive", "ingredients",
+  "excipients", "listed", "below", "schedule", "prescription", "only", "medicine",
+  "drug", "pharmaceutical", "formulation", "composition", "strength", "storage",
+  "this", "that", "with", "from", "have", "been", "will", "would", "could", "should",
+  "take", "taken", "taking", "used", "using", "treatment", "treat", "therapy",
+  // Units
+  "mg", "mcg", "ml", "gm", "kg", "iu", "unit", "units",
+]);
+
+// Minimum length for a token to be considered (drug names are usually 4+ chars)
+const MIN_TOKEN_LENGTH = 5;
+
+// Fuse.js score threshold (0 = perfect, lower = stricter)
+const FUSE_THRESHOLD = 0.1;
+
+// Minimum confidence to include in results (0-1 scale)
+const MIN_CONFIDENCE = 0.85;
+
 export async function loadDictionary(): Promise<DictionaryItem[]> {
   if (dictionaryCache) return dictionaryCache;
   try {
@@ -19,12 +54,18 @@ export async function loadDictionary(): Promise<DictionaryItem[]> {
     if (!res.ok) throw new Error(`Failed to fetch dictionary: ${res.statusText}`);
     dictionaryCache = (await res.json()) as DictionaryItem[];
     
-    // Initialize Fuse
+    // Initialize Fuse with stricter settings
     fuse = new Fuse(dictionaryCache, {
-      keys: ["names", "canonical"],
+      keys: [
+        { name: "canonical", weight: 2 }, // Prioritize canonical name
+        { name: "names", weight: 1 },
+      ],
       includeScore: true,
-      threshold: 0.2, // Lower is stricter (0.0 = exact, 1.0 = match anything)
+      threshold: FUSE_THRESHOLD, // Very strict matching
       ignoreLocation: true,
+      minMatchCharLength: 4,
+      findAllMatches: false,
+      shouldSort: true,
     });
 
     console.log(`Dictionary loaded successfully: ${dictionaryCache.length} items`);
@@ -35,46 +76,87 @@ export async function loadDictionary(): Promise<DictionaryItem[]> {
   }
 }
 
+/**
+ * Detect drugs/salts from OCR text.
+ * Uses strict matching to minimize false positives.
+ */
 export async function detectDrugs(text: string) {
   await loadDictionary();
   if (!fuse) return [];
 
-  // Clean text and split into tokens
-  const cleanText = text.replace(/[^\w\s]/g, " ").toLowerCase();
-  const tokens = cleanText.split(/\s+/).filter(t => t.length > 3);
-  
-  // Generate bigrams for multi-word drugs
-  const bigrams: string[] = [];
+  // Clean text: keep only alphanumeric + spaces, lowercase
+  const cleanText = text
+    .replace(/[^a-zA-Z0-9\s]/g, " ")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+
+  // Split into tokens, filter short words and stopwords
+  const tokens = cleanText
+    .split(" ")
+    .filter(t => t.length >= MIN_TOKEN_LENGTH)
+    .filter(t => !STOPWORDS.has(t));
+
+  // Generate bigrams and trigrams for multi-word drug names
+  const ngrams: string[] = [...tokens];
   for (let i = 0; i < tokens.length - 1; i++) {
-    bigrams.push(`${tokens[i]} ${tokens[i + 1]}`);
+    ngrams.push(`${tokens[i]} ${tokens[i + 1]}`);
+  }
+  for (let i = 0; i < tokens.length - 2; i++) {
+    ngrams.push(`${tokens[i]} ${tokens[i + 1]} ${tokens[i + 2]}`);
   }
 
-  const candidates = [...tokens, ...bigrams];
-  const results = new Map<string, any>();
+  const results = new Map<string, {
+    slug: string;
+    name: string;
+    confidence: number;
+    atc: string | null;
+    matchedToken: string;
+  }>();
 
-  for (const cand of candidates) {
-    const searchRes = fuse.search(cand);
-    if (searchRes.length > 0) {
-      const best = searchRes[0];
-      // Fuse score: 0 is perfect, 1 is mismatch. 
-      // We accept matches with score < 0.2 (very close)
-      if (best.score !== undefined && best.score < 0.2) {
-        // Use higher confidence if we already found this drug
-        const existing = results.get(best.item.slug);
-        const confidence = 1 - best.score;
+  for (const candidate of ngrams) {
+    const searchResults = fuse.search(candidate);
+    
+    if (searchResults.length > 0) {
+      const best = searchResults[0];
+      
+      // Only accept very close matches
+      if (best.score !== undefined && best.score <= FUSE_THRESHOLD) {
+        const confidence = parseFloat((1 - best.score).toFixed(3));
         
-        if (!existing || confidence > existing.confidence) {
+        // Skip low confidence matches
+        if (confidence < MIN_CONFIDENCE) continue;
+        
+        // Skip if it's a generic category (no specific ATC code or very short ATC)
+        // Real drugs have ATC codes like A01AA01, categories are like A or A01
+        const atc = best.item.atc;
+        const isCategory = !atc || atc.length < 5;
+        
+        // Prefer drugs with full ATC codes
+        const existing = results.get(best.item.slug);
+        const shouldReplace = !existing || 
+          confidence > existing.confidence ||
+          (!existing.atc && atc && atc.length >= 5);
+        
+        if (shouldReplace && !isCategory) {
           results.set(best.item.slug, {
             slug: best.item.slug,
             name: best.item.canonical,
-            confidence: parseFloat(confidence.toFixed(2)),
-            atc: best.item.atc,
+            confidence,
+            atc,
+            matchedToken: candidate,
           });
         }
       }
     }
   }
 
-  return Array.from(results.values());
-}
+  // Sort by confidence descending
+  const detected = Array.from(results.values())
+    .sort((a, b) => b.confidence - a.confidence)
+    .map(({ slug, name, confidence, atc }) => ({ slug, name, confidence, atc }));
 
+  console.log(`Drug detection: ${tokens.length} tokens → ${detected.length} drugs found`);
+  
+  return detected;
+}
