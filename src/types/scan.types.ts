@@ -30,4 +30,10 @@ export interface ScanResult {
   confidence?: number;
   raw?: ScanRaw;
   createdAt: string;
+  detectedDrugs?: Array<{
+    slug: string;
+    name: string;
+    confidence?: number;
+    atc?: string | null;
+  }>;
 }
