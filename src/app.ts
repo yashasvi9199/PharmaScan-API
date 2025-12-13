@@ -1,30 +1,41 @@
 import express from "express";
 import cors from "cors";
+import { corsConfig } from "./config/cors";
+import { errorHandler, apiRateLimit } from "./middlewares";
+import { logger } from "./utils/logger";
+import router from "./routes";
 
-// Create express app and apply minimal global middleware.
-// This file is intentionally defensive: if you already have route modules
-// under ./routes, we'll try to mount them, but failure will not crash the app.
+// Create express app
 const app = express();
 
-app.use(cors());
-app.use(express.json());
+// Apply global middleware
+app.use(cors(corsConfig));
+app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: false }));
 
-try {
-  const routesModule = require("./routes");
-  // routesModule may export a Router or an object with default
-  const router = routesModule?.default ?? routesModule;
-  if (router && typeof router === "function") {
-    app.use("/api", router);
-  }
-} catch (err) {
-  // ignore: routes folder may not exist yet in all branches
-  // console.debug("No routes mounted:", (err as Error).message);
-}
+// Apply rate limiting to API routes
+app.use("/api", apiRateLimit);
 
-// Health endpoint for readiness checks (fast, no DB work).
+// Mount API routes
+app.use("/api", router);
+
+// Health endpoint for readiness checks
 app.get("/health", (_req, res) => {
-  res.status(200).json({ ok: true, uptime: process.uptime() });
+  res.status(200).json({ 
+    ok: true, 
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+  });
 });
+
+// 404 handler
+app.use((_req, res) => {
+  res.status(404).json({ success: false, error: "Not Found" });
+});
+
+// Global error handler (must be last)
+app.use(errorHandler);
+
+logger.info("Express app initialized");
 
 export default app;
