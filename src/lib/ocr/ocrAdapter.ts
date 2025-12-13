@@ -9,44 +9,69 @@ export interface OCRAdapterResult {
 }
 
 /**
- * Enhanced OCR preprocessing for medicine labels/strips.
- * - Upscale for better character recognition (simulates higher DPI)
- * - Grayscale + high contrast for clearer text edges
- * - Adaptive thresholding simulation via normalize + modulate
- * - Multiple Tesseract hints for label-style text
+ * Run OCR with multiple preprocessing strategies to find the best result.
  */
 export async function runOCR(buffer: Buffer): Promise<OCRAdapterResult> {
-  // Step 1: Enhanced preprocessing pipeline
-  const preprocessed = await sharp(buffer)
-    .rotate() // Respect EXIF orientation
-    .resize({ width: 3000, withoutEnlargement: false }) // Higher resolution for better detail
-    .grayscale()
-    .linear(1.5, -0.2) // Increase contrast (slope, intercept)
-    .sharpen({
-      sigma: 2,
-      m1: 0,
-      m2: 3,
-      x1: 2,
-      y2: 10,
-      y3: 20,
-    }) // Advanced sharpening
-    .threshold(160) // Higher threshold for cleaner binarization
-    .toBuffer();
+  const strategies = [
+    // Strategy 1: Standard (Grayscale + Normalize)
+    async (b: Buffer) =>
+      sharp(b)
+        .rotate()
+        .resize({ width: 2000, withoutEnlargement: false })
+        .grayscale()
+        .normalise()
+        .toBuffer(),
 
-  // Step 2: Run Tesseract with optimized settings for medicine labels
-  const { data } = await Tesseract.recognize(preprocessed, "eng", {
-    tessedit_pageseg_mode: "6", // PSM 6: Assume a single uniform block of text (better for dense lists)
-    tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,%-/()[]: ", // Added [] and :
-    preserve_interword_spaces: "1",
-    tessjs_create_hocr: "0",
-    tessjs_create_tsv: "0",
-  } as any);
+    // Strategy 2: High Contrast Binarization
+    async (b: Buffer) =>
+      sharp(b)
+        .rotate()
+        .resize({ width: 2000, withoutEnlargement: false })
+        .grayscale()
+        .sharpen()
+        .threshold(128)
+        .toBuffer(),
 
-  return {
-    text: data.text ?? "",
-    confidence:
-      typeof (data as any).confidence === "number" ? (data as any).confidence : undefined,
-    raw: data as unknown,
-  };
+    // Strategy 3: Inverted (White text on dark background)
+    async (b: Buffer) =>
+      sharp(b)
+        .rotate()
+        .resize({ width: 2000, withoutEnlargement: false })
+        .grayscale()
+        .negate()
+        .normalise()
+        .toBuffer(),
+  ];
+
+  let bestResult: OCRAdapterResult = { text: "", confidence: 0 };
+
+  for (const strategy of strategies) {
+    try {
+      const processedBuffer = await strategy(buffer);
+      const { data } = await Tesseract.recognize(processedBuffer, "eng", {
+        tessedit_pageseg_mode: "11", // PSM 11: Sparse text (better for scattered labels)
+        tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,%-/()[]: ",
+        preserve_interword_spaces: "1",
+      } as any);
+
+      const confidence = typeof (data as any).confidence === "number" ? (data as any).confidence : 0;
+      
+      // If this result is significantly better, keep it
+      if (confidence > bestResult.confidence!) {
+        bestResult = {
+          text: data.text ?? "",
+          confidence,
+          raw: data as unknown,
+        };
+      }
+
+      // Early exit if we have a very good result
+      if (confidence > 85) break;
+    } catch (err) {
+      console.warn("OCR strategy failed:", err);
+    }
+  }
+
+  return bestResult;
 }
 
