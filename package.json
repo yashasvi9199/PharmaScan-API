@@ -17,14 +17,14 @@
     "fuse.js": "^7.1.0",
     "multer": "^2.0.2",
     "sharp": "^0.34.5",
-    "tesseract.js": "^6.0.1"
-  },
-  "devDependencies": {
+    "tesseract.js": "^6.0.1",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/multer": "^2.0.0",
     "@types/node": "^24.10.3",
-    "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.3"
+  },
+  "devDependencies": {
+    "ts-node-dev": "^2.0.0"
   }
 }
