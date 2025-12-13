@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getAllScans, getScanDetail, deleteScan } from "../controllers/history.controller";
+import { getAllScans, getScanDetail, deleteScan } from "../controllers";
 
 const router = Router();
 
