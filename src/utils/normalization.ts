@@ -7,7 +7,20 @@
 export function normalizeText(text: string): string {
   return text
     .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/[^a-z0-9\s]/g, " ") // Replace special chars with space
+    .replace(/\s+/g, " ") // Collapse multiple spaces
+    .replace(/([0-9])([a-z])/g, "$1 $2") // Split number-letter (e.g., 500mg -> 500 mg)
+    .replace(/([a-z])([0-9])/g, "$1 $2") // Split letter-number
+    .replace(/\b(tab|cap|inj|syr|susp|sol|oint|crm|gel|drops)\b/g, "") // Remove common forms
+    .trim();
+}
+
+export function cleanOCRText(text: string): string {
+  return text
+    .replace(/\|/g, "I") // Fix common OCR error | -> I
+    .replace(/0/g, "O") // Fix 0 -> O (context dependent, but safe for drug names usually)
+    .replace(/1/g, "l") // Fix 1 -> l
+    .replace(/[\n\r]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
