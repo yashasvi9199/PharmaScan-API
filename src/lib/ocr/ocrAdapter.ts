@@ -31,6 +31,7 @@ class ImagePreprocessor {
       // Global contrast adjustment
       .linear(1.8, -60)
       .normalize()
+      .png()
       .toBuffer();
   }
 
@@ -55,7 +56,8 @@ class ImagePreprocessor {
       }
     })
     .threshold(128, { grayscale: true })
-    .sharpen({ sigma: 0.8, m1: 0.5, m2: 3.0 })
+    .sharpen(0.8, 0.5, 3.0)
+    .png()
     .toBuffer();
   }
 
@@ -82,6 +84,7 @@ class ImagePreprocessor {
         fit: 'contain',
         background: { r: 255, g: 255, b: 255 }
       })
+      .png()
       .toBuffer();
   }
 
@@ -95,6 +98,7 @@ class ImagePreprocessor {
       .linear(2.0, -100)  // High contrast
       .sharpen(1.2, 1.0, 2.0)
       .threshold(160, { grayscale: true })
+      .png()
       .toBuffer();
   }
 
@@ -133,6 +137,7 @@ class ImagePreprocessor {
     return await sharp(gray)
       .linear(1.0, 255 - avgBackground) // Shift to white
       .threshold(200, { grayscale: true })
+      .png()
       .toBuffer();
   }
 
