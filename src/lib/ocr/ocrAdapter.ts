@@ -17,26 +17,47 @@ export async function runOCR(buffer: Buffer): Promise<OCRAdapterResult> {
     async (b: Buffer) =>
       sharp(b)
         .rotate()
-        .resize({ width: 2000, withoutEnlargement: false })
+        .resize({ width: 2500, withoutEnlargement: false })
         .grayscale()
         .normalise()
         .toBuffer(),
 
-    // Strategy 2: High Contrast Binarization
+    // Strategy 2: High Contrast (Sharpen + Threshold)
     async (b: Buffer) =>
       sharp(b)
         .rotate()
-        .resize({ width: 2000, withoutEnlargement: false })
+        .resize({ width: 2500, withoutEnlargement: false })
         .grayscale()
-        .sharpen()
-        .threshold(128)
+        .sharpen({ sigma: 1.5 })
+        .threshold(140) // Slightly higher threshold
         .toBuffer(),
 
-    // Strategy 3: Inverted (White text on dark background)
+    // Strategy 3: Denoise + Contrast (Median + Modulate)
     async (b: Buffer) =>
       sharp(b)
         .rotate()
-        .resize({ width: 2000, withoutEnlargement: false })
+        .resize({ width: 2500, withoutEnlargement: false })
+        .grayscale()
+        .median(1) // Reduce noise
+        .linear(1.5, -30) // Boost contrast using linear transformation
+        .sharpen()
+        .toBuffer(),
+
+    // Strategy 4: Gamma Correction (For dark/shadowed images)
+    async (b: Buffer) =>
+      sharp(b)
+        .rotate()
+        .resize({ width: 2500, withoutEnlargement: false })
+        .grayscale()
+        .gamma(2.0)
+        .normalise()
+        .toBuffer(),
+
+    // Strategy 5: Inverted (White text on dark background)
+    async (b: Buffer) =>
+      sharp(b)
+        .rotate()
+        .resize({ width: 2500, withoutEnlargement: false })
         .grayscale()
         .negate()
         .normalise()
@@ -49,8 +70,7 @@ export async function runOCR(buffer: Buffer): Promise<OCRAdapterResult> {
     try {
       const processedBuffer = await strategy(buffer);
       const { data } = await Tesseract.recognize(processedBuffer, "eng", {
-        tessedit_pageseg_mode: "11", // PSM 11: Sparse text (better for scattered labels)
-        tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,%-/()[]: ",
+        tessedit_pageseg_mode: "3", // PSM 3: Fully automatic page segmentation, but no OSD.
         preserve_interword_spaces: "1",
       } as any);
 
