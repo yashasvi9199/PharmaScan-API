@@ -14,95 +14,93 @@ const PHARMA_TERMS = [
   "tablet", "capsule", "mg", "ml", "g", "mcg", "injection", "syrup", "suspension",
   "ip", "bp", "usp", "batch", "mfg", "exp", "mrp", "incl", "taxes",
   "store", "cool", "dry", "place", "dosage", "physician", "warning",
-  "composition", "contains", "hydrochloride", "sodium", "potassium"
+  "composition", "contains", "hydrochloride", "sodium", "potassium",
+  "marketed", "manufactured", "india", "ltd", "pvt", "regd", "trade", "mark"
 ];
 
 /**
- * Run OCR with advanced preprocessing and ensemble strategy.
+ * Run OCR with robust preprocessing and sparse text mode.
  */
 export async function runOCR(buffer: Buffer): Promise<OCRAdapterResult> {
-  // 1. Preprocess image with multiple strategies
+  // Strategies: Start with minimal processing to avoid destroying data
   const strategies = [
-    // Strategy 1: Standard High-Res
+    // Strategy 1: Minimal Processing (Grayscale + PNG format)
+    // Best for clean images where filters might hurt
     async (b: Buffer) =>
       sharp(b)
-        .rotate()
-        .resize({ width: 2500, withoutEnlargement: false })
+        .resize({ width: 1800, withoutEnlargement: true })
         .grayscale()
-        .normalise()
+        .png()
         .toBuffer(),
 
-    // Strategy 2: High Contrast (Sharpen + Threshold)
+    // Strategy 2: Standard Normalize (Good for lighting issues)
     async (b: Buffer) =>
       sharp(b)
-        .rotate()
-        .resize({ width: 2500, withoutEnlargement: false })
+        .resize({ width: 1800, withoutEnlargement: true })
+        .grayscale()
+        .normalise()
+        .png()
+        .toBuffer(),
+
+    // Strategy 3: High Contrast (Sharpen + Threshold)
+    // Best for faint text
+    async (b: Buffer) =>
+      sharp(b)
+        .resize({ width: 1800, withoutEnlargement: true })
         .grayscale()
         .sharpen({ sigma: 1.5 })
         .threshold(140)
-        .toBuffer(),
-
-    // Strategy 3: Denoise + Contrast
-    async (b: Buffer) =>
-      sharp(b)
-        .rotate()
-        .resize({ width: 2500, withoutEnlargement: false })
-        .grayscale()
-        .median(1)
-        .linear(1.5, -30)
-        .sharpen()
-        .toBuffer(),
-        
-    // Strategy 4: Gamma Correction (for shadows)
-    async (b: Buffer) =>
-      sharp(b)
-        .rotate()
-        .resize({ width: 2500, withoutEnlargement: false })
-        .grayscale()
-        .gamma(2.0)
-        .normalise()
+        .png()
         .toBuffer(),
   ];
 
-  const results: OCRAdapterResult[] = [];
+  let bestResult: OCRAdapterResult = { text: "", confidence: 0 };
   
-  // Create a worker once to reuse
+  // Initialize worker
   const worker = await createWorker("eng", 1, {
     logger: m => process.env.NODE_ENV === 'development' ? console.log(m) : null,
   });
 
-  // Set advanced parameters for medicine labels
+  // Use PSM 11 (Sparse Text) - Critical for medicine strips which have scattered text
   await worker.setParameters({
-    tessedit_pageseg_mode: PSM.AUTO, // Auto PSM
+    tessedit_pageseg_mode: PSM.SPARSE_TEXT,
     tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,:;()%/mg-µ[] ",
     preserve_interword_spaces: "1",
-    textord_min_linesize: "2.5",
   });
 
-  // Run strategies in parallel (or sequential if memory constrained)
-  // Sequential is safer for memory
   for (const [index, strategy] of strategies.entries()) {
     try {
       const processedBuffer = await strategy(buffer);
       const { data } = await worker.recognize(processedBuffer);
       
-      // Calculate confidence boost based on pharma terms
-      const text = data.text || "";
+      const text = (data.text || "").trim();
+      
+      // Calculate score based on pharma terms
       const words = text.toLowerCase().split(/\W+/);
       const matchedTerms = words.filter(w => PHARMA_TERMS.includes(w));
-      const termScore = Math.min((matchedTerms.length * 5), 20); // Up to 20 points boost
       
-      const confidence = (data.confidence || 0) + termScore;
+      // Boost confidence significantly if we find pharma terms
+      // This helps distinguish "good" text from "random noise"
+      const termScore = Math.min((matchedTerms.length * 10), 40); 
+      
+      const rawConfidence = data.confidence || 0;
+      const finalConfidence = Math.min(rawConfidence + termScore, 99);
 
-      results.push({
-        text,
-        confidence: Math.min(confidence, 99),
-        raw: data,
-        engine: `strategy-${index + 1}`
-      });
+      console.log(`[OCR Strategy ${index + 1}] Length: ${text.length}, Terms: ${matchedTerms.length}, RawConf: ${rawConfidence}, FinalConf: ${finalConfidence}`);
 
-      // Early exit if excellent result
-      if (confidence > 90) break;
+      // If this result is better, keep it
+      // We prioritize results with more pharma terms even if raw confidence is slightly lower
+      if (finalConfidence > (bestResult.confidence || 0)) {
+        bestResult = {
+          text,
+          confidence: finalConfidence,
+          raw: data,
+          engine: `strategy-${index + 1}`
+        };
+      }
+
+      // Early exit if we have a great result
+      if (finalConfidence > 90 && text.length > 50) break;
       
     } catch (err) {
       console.warn(`OCR Strategy ${index + 1} failed:`, err);
@@ -110,15 +108,5 @@ export async function runOCR(buffer: Buffer): Promise<OCRAdapterResult> {
   }
 
   await worker.terminate();
-
-  if (results.length === 0) {
-    return { text: "", confidence: 0 };
-  }
-
-  // Select best result by confidence
-  const bestResult = results.reduce((prev, current) => 
-    (current.confidence || 0) > (prev.confidence || 0) ? current : prev
-  );
-
   return bestResult;
 }
