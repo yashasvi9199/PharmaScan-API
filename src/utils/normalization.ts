@@ -18,8 +18,6 @@ export function normalizeText(text: string): string {
 export function cleanOCRText(text: string): string {
   return text
     .replace(/\|/g, "I") // Fix common OCR error | -> I
-    .replace(/0/g, "O") // Fix 0 -> O (context dependent, but safe for drug names usually)
-    .replace(/1/g, "l") // Fix 1 -> l
     .replace(/[\n\r]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();

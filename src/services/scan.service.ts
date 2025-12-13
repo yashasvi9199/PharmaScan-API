@@ -11,9 +11,10 @@ export async function processScan(fileBuffer: Buffer, filename: string): Promise
   const normalizedText = normalizeText(cleanedText);
   const drugs = await detectDrugs(normalizedText);
 
-  const result: ScanResult = {
+  const result: ScanResult & { text: string } = {
     id: `scan-${Date.now()}`,
-    extractedText: normalizedText,
+    extractedText: cleanedText, // Use readable text for display/storage
+    text: cleanedText, // Alias for frontend compatibility
     confidence: ocr.confidence,
     raw: { ocr },
     createdAt: new Date().toISOString(),
