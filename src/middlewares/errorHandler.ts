@@ -3,37 +3,44 @@
 
 import { Request, Response, NextFunction } from "express";
 import { logger } from "../utils/logger";
+import { env } from "../config/env";
 
-export interface AppError extends Error {
-  statusCode?: number;
-  isOperational?: boolean;
+export class AppError extends Error {
+  public statusCode: number;
+  public isOperational: boolean;
+
+  constructor(message: string, statusCode: number, isOperational = true) {
+    super(message);
+    this.statusCode = statusCode;
+    this.isOperational = isOperational;
+    Error.captureStackTrace(this, this.constructor);
+  }
 }
 
-export function errorHandler(
-  err: AppError,
-  _req: Request,
+export const errorHandler = (
+  err: Error | AppError,
+  req: Request,
   res: Response,
-  _next: NextFunction
-): void {
-  const statusCode = err.statusCode || 500;
-  const message = err.message || "Internal Server Error";
-  const isOperational = err.isOperational ?? false;
+  next: NextFunction
+) => {
+  const statusCode = err instanceof AppError && err.statusCode ? err.statusCode : 500;
+  const isOperational = err instanceof AppError && err.isOperational ? err.isOperational : false;
 
   // Log error
-  if (statusCode >= 500) {
-    logger.error(`Server error: ${message}`, { stack: err.stack });
-  } else {
-    logger.warn(`Client error: ${message}`);
-  }
+  logger.error(
+    `${statusCode} - ${err.message} - ${req.originalUrl} - ${req.method} - ${req.ip}`
+  );
 
   res.status(statusCode).json({
     success: false,
-    error: message,
-    ...(process.env.NODE_ENV === "development" && !isOperational
-      ? { stack: err.stack }
-      : {}),
+    error: statusCode === 500 ? "Internal Server Error" : err.name,
+    message: err.message,
+    stack:
+      env.NODE_ENV === "development" && !isOperational
+        ? err.stack
+        : undefined,
   });
-}
+};
 
 /**
  * Async handler wrapper to catch errors in async route handlers

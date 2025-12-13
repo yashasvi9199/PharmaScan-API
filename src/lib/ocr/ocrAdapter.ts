@@ -1,5 +1,6 @@
 import sharp from "sharp";
 import Tesseract from "tesseract.js";
+import { Buffer } from "buffer";
 
 export interface OCRAdapterResult {
   text: string;

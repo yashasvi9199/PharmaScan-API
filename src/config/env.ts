@@ -6,6 +6,8 @@ interface EnvConfig {
   PORT: number;
   CORS_ORIGINS: string[];
   API_VERSION: string;
+  REDIS_URL: string;
+  LOG_LEVEL: string;
 }
 
 function parseEnv(): EnvConfig {
@@ -15,7 +17,7 @@ function parseEnv(): EnvConfig {
   
   const corsOrigins = (process.env.CORS_ORIGINS || "")
     .split(",")
-    .map((o) => o.trim())
+    .map((o: string) => o.trim())
     .filter(Boolean);
 
   if (allowLocalhost) {
@@ -27,6 +29,8 @@ function parseEnv(): EnvConfig {
     PORT: port,
     CORS_ORIGINS: corsOrigins,
     API_VERSION: process.env.API_VERSION || "1.0.0",
+    REDIS_URL: process.env.REDIS_URL || "redis://localhost:6379",
+    LOG_LEVEL: process.env.LOG_LEVEL || "info",
   };
 }
 

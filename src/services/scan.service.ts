@@ -1,7 +1,9 @@
 import { runOCR } from "../lib/ocr/ocrAdapter";
+import { normalizeText } from "../utils/normalization";
+import { detectDrugs } from "./dictionary.service";
+import { Buffer } from "buffer";
 import { saveScan } from "../repositories/scan.repository";
 import type { ScanResult } from "../types/scan.types";
-import { detectDrugs } from "./dictionary.service";
 
 export async function processScan(fileBuffer: Buffer, filename: string): Promise<ScanResult> {
   const ocr = await runOCR(fileBuffer);

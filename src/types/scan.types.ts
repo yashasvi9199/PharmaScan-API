@@ -24,6 +24,8 @@ export interface ScanRaw {
   [key: string]: unknown;
 }
 
+import { Buffer } from "buffer";
+
 export interface ScanResult {
   id: string;
   extractedText: string;

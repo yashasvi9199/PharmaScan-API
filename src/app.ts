@@ -1,6 +1,7 @@
-import express from "express";
+import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import { corsConfig } from "./config/cors";
+import { env } from "./config/env";
 import { errorHandler, apiRateLimit } from "./middlewares";
 import { logger } from "./utils/logger";
 import router from "./routes";
@@ -20,11 +21,11 @@ app.use("/api", apiRateLimit);
 app.use("/api", router);
 
 // Health endpoint for readiness checks
-app.get("/health", (_req, res) => {
-  res.status(200).json({ 
-    ok: true, 
-    uptime: process.uptime(),
-    timestamp: new Date().toISOString(),
+app.get("/", (_req: Request, res: Response) => {
+  res.json({
+    message: "PharmaScan API is running",
+    version: env.API_VERSION,
+    env: env.NODE_ENV,
   });
 });
 
@@ -33,8 +34,15 @@ app.use((_req, res) => {
   res.status(404).json({ success: false, error: "Not Found" });
 });
 
-// Global error handler (must be last)
-app.use(errorHandler);
+// Global Error Handler
+app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+  logger.error(`Unhandled Error: ${err.message}`);
+  res.status(500).json({
+    success: false,
+    error: "Internal Server Error",
+    message: env.NODE_ENV === "development" ? err.message : undefined,
+  });
+});
 
 logger.info("Express app initialized");
 

@@ -1,6 +1,8 @@
 // src/utils/logger.ts
 // Simple logging utility
 
+import { env } from "../config/env";
+
 type LogLevel = "debug" | "info" | "warn" | "error";
 
 const LOG_LEVELS: Record<LogLevel, number> = {
@@ -10,7 +12,7 @@ const LOG_LEVELS: Record<LogLevel, number> = {
   error: 3,
 };
 
-const currentLevel = (process.env.LOG_LEVEL as LogLevel) || "info";
+const currentLevel = (env.LOG_LEVEL as LogLevel) || "info";
 
 function shouldLog(level: LogLevel): boolean {
   return LOG_LEVELS[level] >= LOG_LEVELS[currentLevel];

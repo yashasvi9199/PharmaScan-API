@@ -2,8 +2,8 @@
 // Database connection and utilities
 // Currently using JSON file store, can be upgraded to PostgreSQL
 
-import fs from "fs";
-import path from "path";
+import * as fs from "fs";
+import * as path from "path";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 
