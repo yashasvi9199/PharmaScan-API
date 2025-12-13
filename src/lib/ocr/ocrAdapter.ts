@@ -106,18 +106,15 @@ class ImagePreprocessor {
    * Method 5: Multi-Scale Enhancement
    */
   static async multiScaleEnhancement(buffer: Buffer): Promise<Buffer> {
-    const metadata = await sharp(buffer).metadata();
-    
     // Create multiple enhanced versions and combine
     const [contrast, binary, denoised] = await Promise.all([
-      this.adaptiveContrast(buffer),
-      this.adaptiveBinarization(buffer),
-      this.denoiseAndEnhance(buffer)
+      ImagePreprocessor.adaptiveContrast(buffer),
+      ImagePreprocessor.adaptiveBinarization(buffer),
+      ImagePreprocessor.denoiseAndEnhance(buffer)
     ]);
 
     // For medicine strips, binarized version usually works best
-    // but we'll let OCR decide by trying all
-    return binary; // Primary return, but we'll use all in OCR
+    return binary; 
   }
 
   /**
@@ -130,7 +127,7 @@ class ImagePreprocessor {
       .toBuffer();
 
     // Estimate background color by sampling edges
-    const edgeSamples = await this.sampleEdges(buffer);
+    const edgeSamples = await ImagePreprocessor.sampleEdges(buffer);
     const avgBackground = edgeSamples.reduce((a, b) => a + b, 0) / edgeSamples.length;
 
     // Normalize to white background
@@ -365,6 +362,10 @@ export async function runOCR(buffer: Buffer): Promise<OCRAdapterResult> {
   // Step 1: Preprocess image with multiple methods
   const preprocessMethods = [
     {
+      name: 'minimal-processing', // Fallback: just grayscale + png
+      processor: async (b: Buffer) => sharp(b).grayscale().png().toBuffer()
+    },
+    {
       name: 'adaptive-binarization',
       processor: ImagePreprocessor.adaptiveBinarization
     },
@@ -395,8 +396,10 @@ export async function runOCR(buffer: Buffer): Promise<OCRAdapterResult> {
       // Get image quality score
       const imageQuality = await OCRQualityValidator.estimateImageQuality(processedBuffer);
       
-      if (imageQuality < 30) {
-        console.warn(`Image quality too low (${imageQuality}%) for method ${method.name}`);
+      // Relaxed threshold - 0.6% was seen for valid images, so we lower the bar
+      // or ignore it if it's too unreliable. Let's set a very low sanity check.
+      if (imageQuality < 0.1) {
+        console.warn(`Image quality extremely low (${imageQuality}%) for method ${method.name}`);
         continue;
       }
       
@@ -449,7 +452,9 @@ export async function runOCR(buffer: Buffer): Promise<OCRAdapterResult> {
         tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,:;()%/mg-µ[]@#&*+-= ',
       });
       
-      const { data } = await worker.recognize(buffer);
+      // Ensure buffer is in a supported format (PNG)
+      const pngBuffer = await sharp(buffer).png().toBuffer();
+      const { data } = await worker.recognize(pngBuffer);
       await worker.terminate();
       
       if (data.confidence > bestOverallResult.confidence) {
