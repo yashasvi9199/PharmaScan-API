@@ -1,5 +1,5 @@
 import { runOCR } from "../lib/ocr/ocrAdapter";
-import { saveScan } from "../repositories/ocr.repo";
+import { saveScan } from "../repositories/scan.repository";
 import type { ScanResult } from "../types/scan.types";
 import { detectDrugs } from "./dictionary.service";
 
