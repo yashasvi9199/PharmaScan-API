@@ -1,0 +1,12 @@
+{
+  "buildCommand": "npm run build",
+  "startCommand": "npm start",
+  "envVars":
+    [
+      { "key": "NODE_ENV", "value": "production" },
+      { "key": "PORT", "value": "10000" },
+      { "key": "CORS_ORIGINS", "value": "https://pharmascan.onrender.com" },
+      { "key": "API_VERSION", "value": "1.0.0" },
+      { "key": "LOG_LEVEL", "value": "info" },
+    ],
+}
